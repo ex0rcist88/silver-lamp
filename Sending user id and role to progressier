@@ -1,0 +1,61 @@
+add_action('wp_footer', function () {
+    // Only proceed if a user is logged in
+    if (is_user_logged_in()) {
+        $current_user = wp_get_current_user(); // Get the current WP_User object
+        $user_id = $current_user->ID;          // Get the user's ID (integer)
+        $user_roles = $current_user->roles;    // Get the user's roles (array of strings, e.g., ['administrator', 'subscriber'])
+
+        // --- Prepare data for JavaScript ---
+
+        // Escape the user ID for safe JavaScript output.
+        // While often numeric, escaping is good practice. Progressier might prefer it as a string.
+        $js_user_id = esc_js($user_id); // Or esc_js((string)$user_id) if Progressier strictly requires a string ID
+
+        // Prepare the roles as a comma-separated string for the 'tags' parameter.
+        // Check if roles exist and are not empty before imploding.
+        $tags_string = '';
+        if (!empty($user_roles) && is_array($user_roles)) {
+            // Sanitize role slugs just in case (though typically safe) and join them.
+            $sanitized_roles = array_map('sanitize_key', $user_roles);
+            $tags_string = implode(',', $sanitized_roles);
+        }
+        // Escape the tags string for safe JavaScript output.
+        $js_user_tags = esc_js($tags_string);
+
+        ?>
+        <script>
+        window.addEventListener("load", function () {
+            // Use a small delay to increase the chance the Progressier SDK is fully initialized.
+            setTimeout(function () {
+                // Check if Progressier SDK and its 'add' method are available
+                if (window.progressier && window.progressier.add) {
+
+                    // Construct the data object to send to Progressier
+                    const progressierData = {
+                        // IMPORTANT: Confirm 'id' is the correct key for user ID in Progressier's client-side SDK.
+                        // Common alternatives might be 'userId', 'user_id'.
+                        id: <?php echo $js_user_id; ?> // Output the user ID (likely as a number or string)
+                    };
+
+                    // Only add the 'tags' key if we actually have roles/tags to send
+                    <?php if (!empty($js_user_tags)) : ?>
+                        // Add the roles as a comma-separated string, matching Progressier's example format for adding tags.
+                        progressierData.tags = "<?php echo $js_user_tags; ?>";
+                    <?php endif; ?>
+
+                    // Send the data to Progressier
+                    window.progressier.add(progressierData);
+
+                    // Debugging log
+                    console.log('Progressier: User data sent:', progressierData);
+
+                } else {
+                    // Warning if the SDK isn't ready
+                    console.warn("Progressier SDK not ready or 'add' method not found after delay.");
+                }
+            }, 500); // 500ms delay
+        });
+        </script>
+        <?php
+    } // end if is_user_logged_in()
+});
